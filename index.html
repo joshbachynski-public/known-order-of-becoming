@@ -88,7 +88,12 @@ p{margin:0;max-width:85ch}
 .wr p{font-size:15px;line-height:1.55}
 .n.hl{box-shadow:0 0 0 4px var(--ink)}
 #pop{position:fixed;z-index:9999;max-width:min(440px,calc(100vw - 32px));max-height:75vh;overflow-y:auto;overscroll-behavior:contain;background:var(--pop);color:var(--popt);font-size:14px;line-height:1.5;padding:10px 12px;border-radius:6px;pointer-events:none}
-#pop.pinned{pointer-events:auto}
+#pop.pinned{pointer-events:auto;padding:0;overflow:hidden}
+#pop .popbar{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 8px 7px 12px;background:var(--pop);border-bottom:1px solid color-mix(in srgb,var(--popt) 35%,transparent);font:600 12px "IBM Plex Sans",sans-serif;cursor:move;touch-action:none;user-select:none}
+#pop .popclose{flex:0 0 auto;width:30px;height:30px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;font:700 20px/1 "IBM Plex Sans",sans-serif;cursor:pointer}
+#pop .popclose:hover,#pop .popclose:focus-visible{background:var(--popt);color:var(--pop);outline:2px solid var(--popt);outline-offset:2px}
+#pop .popbody{max-height:calc(75vh - 45px);overflow-y:auto;overscroll-behavior:contain;padding:10px 12px}
+#pop.dragging{user-select:none}
 #pop a{color:inherit;text-decoration:underline}
 #war .sth{margin:14px 0 2px}
 #war .stl{margin:0 0 6px;padding-left:22px;max-width:85ch}
@@ -365,9 +370,14 @@ document.querySelectorAll('.n').forEach(el=>el.dataset.tip=nodeHTML(el.dataset.i
 const pop=document.getElementById('pop');let pinned=null;
 let hoverT=null,hoverEl=null;
 function clearHover(){clearTimeout(hoverT);hoverT=null;hoverEl=null;}
-function show(el,h,interactive=false){clearHover();pop.innerHTML=h;pop.classList.toggle('pinned',interactive);pop.hidden=false;pop.scrollTop=0;const r=el.getBoundingClientRect();const pw=pop.offsetWidth,ph=pop.offsetHeight,gap=10;let x=r.right+gap;let y=Math.min(Math.max(8,r.top),Math.max(8,innerHeight-ph-8));if(x+pw>innerWidth-8)x=r.left-pw-gap;if(x<8){x=Math.min(Math.max(8,r.left),Math.max(8,innerWidth-pw-8));y=r.bottom+gap;if(y+ph>innerHeight-8)y=Math.max(8,r.top-ph-gap);}pop.style.left=x+'px';pop.style.top=y+'px';}
+function show(el,h,interactive=false){clearHover();pop.innerHTML=interactive?'<div class="popbar"><span>Drag hover</span><button class="popclose" type="button" aria-label="Close hover">×</button></div><div class="popbody">'+h+'</div>':h;pop.classList.toggle('pinned',interactive);pop.hidden=false;pop.scrollTop=0;pop.querySelector('.popbody')?.scrollTo(0,0);const r=el.getBoundingClientRect();const pw=pop.offsetWidth,ph=pop.offsetHeight,gap=10;let x=r.right+gap;let y=Math.min(Math.max(8,r.top),Math.max(8,innerHeight-ph-8));if(x+pw>innerWidth-8)x=r.left-pw-gap;if(x<8){x=Math.min(Math.max(8,r.left),Math.max(8,innerWidth-pw-8));y=r.bottom+gap;if(y+ph>innerHeight-8)y=Math.max(8,r.top-ph-gap);}pop.style.left=x+'px';pop.style.top=y+'px';}
 function hideTransient(){if(!pinned){pop.hidden=true;pop.classList.remove('pinned');}}
 function scheduleShow(el){if(pinned||(hoverEl===el&&!pop.hidden))return;clearHover();hoverEl=el;pop.hidden=true;pop.classList.remove('pinned');hoverT=setTimeout(()=>{if(!pinned&&el.matches(':hover'))show(el,el.dataset.tip,false);},450);}
+let drag=null;
+pop.addEventListener('pointerdown',e=>{const bar=e.target.closest('.popbar');if(!bar||e.target.closest('.popclose'))return;const r=pop.getBoundingClientRect();drag={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top};pop.classList.add('dragging');pop.setPointerCapture(e.pointerId);e.preventDefault();});
+pop.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const x=Math.min(Math.max(8,e.clientX-drag.dx),Math.max(8,innerWidth-pop.offsetWidth-8));const y=Math.min(Math.max(8,e.clientY-drag.dy),Math.max(8,innerHeight-pop.offsetHeight-8));pop.style.left=x+'px';pop.style.top=y+'px';});
+function endDrag(e){if(!drag||drag.id!==e.pointerId)return;drag=null;pop.classList.remove('dragging');if(pop.hasPointerCapture(e.pointerId))pop.releasePointerCapture(e.pointerId);}
+pop.addEventListener('pointerup',endDrag);pop.addEventListener('pointercancel',endDrag);
 function hl(id,on){document.querySelectorAll('.n.hl').forEach(e=>e.classList.remove('hl'));document.querySelectorAll('#wires path.w').forEach(p=>p.style.strokeWidth='');if(!on)return;RAW.forEach((r,k)=>{if(r[0]===id||r[3]===id){document.getElementById('n-'+r[0])?.classList.add('hl');document.getElementById('n-'+r[3])?.classList.add('hl');const p=document.getElementById('w'+k);if(p)p.style.strokeWidth='4';}});}
 document.addEventListener('mouseover',e=>{const lb=e.target.closest&&e.target.closest('#labels .lbl');let hl=document.getElementById('hotlbl');if(lb){if(!hl){hl=document.createElement('div');hl.id='hotlbl';stage.appendChild(hl);}hl.textContent=lb.textContent;hl.style.left=lb.getAttribute('x')+'px';hl.style.top=(+lb.getAttribute('y')+4)+'px';hl.hidden=false;}else if(hl)hl.hidden=true;const el=e.target.closest('[data-tip]');if(el&&!pinned)scheduleShow(el);});
 document.addEventListener('mouseout',e=>{const el=e.target.closest('[data-tip]');if(el&&!(e.relatedTarget&&el.contains(e.relatedTarget))){clearHover();hideTransient();}});
@@ -387,7 +397,7 @@ function apply(){const filt=onlyE!==null||rmE.size||offG.size||offT.size||offO.s
 document.addEventListener('click',e=>{if(e.target.closest('#pop')||e.target.closest('.bar')||e.target.closest('#flt'))return;clearHover();const el=e.target.closest('[data-tip]');if(!el){pinned=null;pop.hidden=true;pop.classList.remove('pinned');return;}const id=el.dataset.id;
  if(id){if(sel.has(id)){sel.delete(id);pinned=null;pop.hidden=true;pop.classList.remove('pinned');}else{sel.add(id);pinned=el;show(el,el.dataset.tip,true);}apply();return;}
  if(pinned===el){pinned=null;pop.hidden=true;pop.classList.remove('pinned');}else{pinned=el;show(el,el.dataset.tip,true);}});
-pop.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const k=+b.dataset.k;if(b.dataset.act==='rm'){rmE.add(k);if(onlyE===k)onlyE=null;}else{onlyE=k;}pinned=null;pop.hidden=true;pop.classList.remove('pinned');apply();});
+pop.addEventListener('click',e=>{if(e.target.closest('.popclose')){pinned=null;drag=null;clearHover();pop.hidden=true;pop.classList.remove('pinned','dragging');return;}const b=e.target.closest('[data-act]');if(!b)return;const k=+b.dataset.k;if(b.dataset.act==='rm'){rmE.add(k);if(onlyE===k)onlyE=null;}else{onlyE=k;}pinned=null;pop.hidden=true;pop.classList.remove('pinned');apply();});
 document.getElementById('flt').addEventListener('change',e=>{const c=e.target.closest('input[data-g]');if(!c)return;const[a,b]=c.dataset.g.split(':');const S=a==='g'?offG:a==='t'?offT:offO;if(c.checked)S.delete(b);else S.add(b);onlyE=null;apply();});
 document.getElementById('flt').addEventListener('click',e=>{const b=e.target.closest('button[data-only]');if(!b)return;const[a,v]=b.dataset.only.split(':');const S=a==='g'?offG:a==='t'?offT:offO;S.clear();document.querySelectorAll('#flt input[data-g^="'+a+':"]').forEach(c=>{const x=c.dataset.g.split(':')[1];if(x!==v)S.add(x);});onlyE=null;apply();});
 document.getElementById('clr').onclick=()=>{sel.clear();offG.clear();offT.clear();offO.clear();rmE.clear();onlyE=null;pinned=null;clearHover();pop.hidden=true;pop.classList.remove('pinned');apply();};
